@@ -1,0 +1,57 @@
+.login-container {
+  display: flex;
+  flex-direction: column; /* Stack children vertically */
+  justify-content: center;
+  align-items: center; /* This centers the children horizontally */
+  height: 100vh;
+  background: linear-gradient(to right, #0f0c29, #302b63, #24243e);
+}
+
+.login-container h2 {
+  color: #fff;
+  margin-bottom: 20px; /* Adjust space between h2 and form */
+}
+
+.login-form {
+  padding: 20px;
+  background: #ffffff30;
+  border-radius: 10px;
+  box-shadow: 0 0 15px #00000050;
+}
+
+.login-form h2 {
+  text-align: center;
+  color: #fff;
+}
+
+.login-formUser input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: none;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+.login-formPass input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: none;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.login-form button {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  background: #574b90;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.login-form button:hover {
+  background: #433e90;
+}
