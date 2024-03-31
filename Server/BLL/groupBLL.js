@@ -141,14 +141,12 @@ const addMessageToGroupConversation = async (groupId, message) => {
     );
   }
 
-  // Adjust the message object to fit the schema
+  // Assuming the incoming message object structure is { sender, content }
   const formattedMessage = {
-    sender: message.fromUserId, // Use 'sender' to match the schema
+    sender: message.sender, // Directly use 'sender' from the incoming message object
     content: message.content,
-    // 'timestamp' will be automatically added by Mongoose
   };
 
-  // Add the correctly formatted message to the group conversation
   groupConversation.messages.push(formattedMessage);
   await groupConversation.save();
 
