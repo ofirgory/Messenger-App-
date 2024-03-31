@@ -15,6 +15,19 @@ import {
 import { useWebSocket } from "../WebSocketContext";
 import MainPageButton from "../components/MainPageButton";
 import { toast } from "react-toastify";
+import Modal from "react-modal";
+import "../css/groupsPage.css";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faPlus,
+  faTimes,
+  faSignOutAlt,
+  faComments,
+  faUserPlus,
+  faUserMinus,
+} from "@fortawesome/free-solid-svg-icons";
+
+//================================================================//
 
 function GroupsPage() {
   const dispatch = useDispatch();
@@ -29,7 +42,30 @@ function GroupsPage() {
   const [messages, setMessages] = useState([]);
   const [newMemberUsernames, setNewMemberUsernames] = useState({});
   const ws = useWebSocket();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState({});
 
+  // Define custom styles for the modal
+  const customModalStyles = {
+    content: {
+      color: "white",
+      top: "50%",
+      left: "50%",
+      right: "auto",
+      bottom: "auto",
+      marginRight: "-50%",
+      transform: "translate(-50%, -50%)",
+      border: "1px solid #ccc",
+      background: "#fff",
+      overflow: "auto",
+      WebkitOverflowScrolling: "touch",
+      borderRadius: "4px",
+      outline: "none",
+      padding: "20px",
+      width: "600px",
+    },
+  };
+  //===================================================================//
   useEffect(() => {
     if (currentUserID) {
       dispatch(fetchAllGroups(currentUserID))
@@ -41,34 +77,66 @@ function GroupsPage() {
         });
     }
   }, [dispatch, currentUserID]);
-
+  //=====================================================================//
   useEffect(() => {
-    const handleMessage = async (event) => {
-      if (event.data instanceof Blob) {
-        const text = await event.data.text();
-        console.log("Received message:", text);
+    const handleMessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === "group") {
+        // Handle group message
+        if (data.groupId !== activeChat?._id) {
+          // Increment unread count for the group if it's not the currently open chat
+          setUnreadCounts((prevCounts) => ({
+            ...prevCounts,
+            [data.groupId]: (prevCounts[data.groupId] || 0) + 1,
+          }));
+        } else {
+          // Update messages state for the active chat
+          const newMessage = {
+            content: data.message.content,
+            senderName: getUserName(data.message.sender) || "Unknown sender",
+            sender: data.message.sender,
+          };
+          setMessages((prevMessages) => [...prevMessages, newMessage]);
+        }
+        toast.info(
+          `New message in group ${getGroupName(data.groupId)}: ${
+            data.message.content
+          }`
+        );
+      } else if (
+        data.type === "user" &&
+        data.message.fromUserId !== currentUserID
+      ) {
+        // Handle user-to-user message, display it if it belongs to the active chat
+        // Optionally, you can also manage unread counts for user chats similar to groups
+        toast.info(
+          `New message from ${getUserName(data.message.fromUserId)}: ${
+            data.message.content
+          }`
+        );
       }
     };
 
-    if (ws) {
-      ws.addEventListener("message", handleMessage);
-    }
+    ws.addEventListener("message", handleMessage);
+    return () => ws.removeEventListener("message", handleMessage);
+  }, [ws, activeChat, currentUserID, users, groups]);
 
-    return () => {
-      if (ws) {
-        ws.removeEventListener("message", handleMessage);
-      }
-    };
-  }, [ws]);
+  //===================================================================//
 
   const getUserName = (userId) => {
-    console.log("Looking up user ID:", userId); // Debug log
     const user = users.find((user) => user._id === userId);
-    console.log("Found user:", user); // Debug log
     return user ? user.fullName : "User not found";
   };
 
+  const getGroupName = (groupId) => {
+    const group = groups.find((group) => group._id === groupId);
+    return group ? group.name : "Unknown Group";
+  };
+
   const handleOpenGroupChat = async (group) => {
+    setIsModalOpen(true);
+    setUnreadCounts((prevCounts) => ({ ...prevCounts, [group._id]: 0 }));
     try {
       await dispatch(createGroupConversation(group._id));
       const actionResult = await dispatch(fetchGroupConversation(group._id));
@@ -100,7 +168,16 @@ function GroupsPage() {
     };
 
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(newMessage));
+      ws.send(
+        JSON.stringify({
+          type: "group",
+          groupId: activeChat._id,
+          message: {
+            content: message,
+            sender: currentUserID,
+          },
+        })
+      );
     }
 
     setMessages([...messages, newMessage]);
@@ -192,70 +269,88 @@ function GroupsPage() {
     <div>
       <MainPageButton />
       <h1>Groups</h1>
-      <Link to="/groupCreation">Create Group</Link>
+      <Link to="/groupCreation" className="btn">
+        Create Group
+      </Link>
+
       {loading ? (
         <p>Loading groups...</p>
-      ) : groups.length > 0 ? (
-        groups.map((group) => (
-          <div key={group._id} style={{ marginBottom: "20px" }}>
-            <h2
-              onClick={() => handleOpenGroupChat(group)}
-              style={{ cursor: "pointer" }}
-            >
-              Name: {group.name}
-            </h2>
-            <p>Description: {group.description}</p>
-            <p>Members:</p>
-            <ul>
-              {group.members.map((member) => (
-                <li key={member.userId}>
-                  {getUserName(member.userId)}
-                  {member.userId !== currentUserID && (
-                    <button
-                      onClick={() =>
-                        handleRemoveMember(group._id, member.userId)
-                      }
-                    >
-                      Remove
-                    </button>
-                  )}
-                  {member.userId === currentUserID && (
-                    <button onClick={() => handleExitGroup(group._id)}>
-                      Exit Group
-                    </button>
-                  )}
-                </li>
-              ))}
-              <li>
-                <input
-                  type="text"
-                  placeholder="Add member by username"
-                  value={newMemberUsernames[group._id] || ""} // Use the group-specific username or an empty string if not set
-                  onChange={(e) =>
-                    setNewMemberUsernames({
-                      ...newMemberUsernames,
-                      [group._id]: e.target.value,
-                    })
-                  }
-                />
-                <button
-                  onClick={() =>
-                    handleAddMember(group._id, newMemberUsernames[group._id])
-                  }
-                >
-                  Add Member
-                </button>
-              </li>
-            </ul>
-          </div>
-        ))
       ) : (
-        <p>No groups found.</p>
+        <div className="groups-container">
+          {groups.map((group) => (
+            <div key={group._id} className="group-item">
+              <h2
+                onClick={() => handleOpenGroupChat(group)}
+                style={{ cursor: "pointer" }}
+              >
+                <FontAwesomeIcon icon={faComments} /> {group.name}
+                {unreadCounts[group._id] > 0 && (
+                  <span>({unreadCounts[group._id]} unread)</span>
+                )}
+              </h2>
+              <p>Description: {group.description}</p>
+              <p>Members:</p>
+              <ul>
+                {group.members.map((member) => (
+                  <li key={member.userId} className="user-item">
+                    {getUserName(member.userId)}
+                    <div className="action-buttons">
+                      {member.userId !== currentUserID && (
+                        <button
+                          onClick={() =>
+                            handleRemoveMember(group._id, member.userId)
+                          }
+                        >
+                          <FontAwesomeIcon icon={faSignOutAlt} />
+                        </button>
+                      )}
+                      {member.userId === currentUserID && (
+                        <button
+                          onClick={() => handleExitGroup(group._id)}
+                          className="icon-button"
+                        >
+                          <FontAwesomeIcon icon={faSignOutAlt} />
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+                <li>
+                  <input
+                    type="text"
+                    placeholder="Add member by username"
+                    value={newMemberUsernames[group._id] || ""}
+                    onChange={(e) =>
+                      setNewMemberUsernames({
+                        ...newMemberUsernames,
+                        [group._id]: e.target.value,
+                      })
+                    }
+                  />
+                  <button
+                    onClick={() =>
+                      handleAddMember(group._id, newMemberUsernames[group._id])
+                    }
+                  >
+                    Add Member
+                  </button>
+                </li>
+              </ul>
+            </div>
+          ))}
+        </div>
       )}
-      {activeChat && (
+
+      {/* Modal for active chat */}
+      <Modal
+        isOpen={isModalOpen}
+        onRequestClose={() => setIsModalOpen(false)}
+        style={customModalStyles}
+        appElement={document.getElementById("root")}
+      >
         <div className="chat-window">
-          <h3>Chat with {activeChat.name}</h3>
-          <button onClick={() => setActiveChat(null)}>Close</button>
+          <h3>Chat with {activeChat?.name}</h3>
+          <button onClick={() => setIsModalOpen(false)}>Close</button>
           <div className="messages">
             {messages.map((msg, index) => (
               <p key={index}>
@@ -274,7 +369,7 @@ function GroupsPage() {
             <button type="submit">Send</button>
           </form>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

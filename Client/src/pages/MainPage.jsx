@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
@@ -22,6 +22,16 @@ import { useWebSocket } from "../WebSocketContext";
 import { toast } from "react-toastify";
 import LogoutButton from "../components/LogOutButton";
 import "../css/mainPage.css";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faComment,
+  faUsers,
+  faHistory,
+  faSignOutAlt,
+  faArrowLeft,
+} from "@fortawesome/free-solid-svg-icons";
+
+//========================================================================//
 
 function MainPage({ currentUser }) {
   const [showModal, setShowModal] = useState(false);
@@ -43,6 +53,7 @@ function MainPage({ currentUser }) {
   const currentConversationId = useSelector(
     (state) => state.conversations.currentConversationId
   );
+  const messagesEndRef = useRef(null);
 
   // const messagesToShow = allMessages.filter((msg) => msg && msg.from);
   const currentUserID = user.user?._id;
@@ -102,57 +113,65 @@ function MainPage({ currentUser }) {
     currentUserID,
     dispatch,
   ]); // Include all dependencies used inside the effect
-
+  //===========================================================//
   useEffect(() => {
     dispatch(fetchUsers());
   }, [dispatch]);
-
+  //===================================================================//
+  // For incoming messages, adjust your WebSocket message handler to correctly identify the sender's name
   useEffect(() => {
-    const handleMessage = async (event) => {
-      console.log("WebSocket message received:", event.data);
-      if (typeof event.data !== "string") {
-        console.log("Received non-JSON message:", event.data);
+    const handleMessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      // Skip messages sent by the current user
+      if (data.message.fromUserId === currentUserID) {
         return;
       }
 
-      const data = JSON.parse(event.data);
-      // Ensure this is a new message notification and it's not from the current user
+      // Construct a notification message
+      let notificationMessage = "New message from ";
+      if (data.type === "group") {
+        const groupName =
+          groups.find((group) => group._id === data.groupId)?.name || "a group";
+        const senderName =
+          users.find((user) => user._id === data.message.sender)?.fullName ||
+          "someone";
+        notificationMessage += `${senderName} in ${groupName}`;
+      } else if (data.type === "user") {
+        const senderName =
+          users.find((user) => user._id === data.message.fromUserId)
+            ?.fullName || "someone";
+        notificationMessage += senderName;
+      }
+
+      // Show notification
+      toast.info(notificationMessage);
+
+      // Add message to chat window if it belongs to the active conversation or group
       if (
-        data.type === "NEW_MESSAGE" &&
-        data.message.fromUserId !== currentUserID
+        (data.type === "user" &&
+          data.conversationId === activeConversationId) ||
+        (data.type === "group" && data.groupId === activeChat?._id)
       ) {
-        const conversationId = data.conversationId;
-
-        // Access the relevant conversation from the Redux state
-        const conversation = state.conversations.conversations[conversationId];
-
-        // Check if the current user is a participant of the conversation
-        const isCurrentUserParticipant = conversation?.participants.some(
-          (participant) => participant.userId === currentUserID
-        );
-
-        if (isCurrentUserParticipant) {
-          // Logic to handle the message for the current user
-          const newMessage = {
-            content: data.message.content,
-            fromFullName: data.message.fromFullName || "Unknown User",
-            fromUserId: data.message.fromUserId,
-            // You may adjust the structure as necessary to fit your state management
-          };
-
-          // Here you could set the message to your local state or dispatch an action to update the Redux state
-          setMessages((prevMessages) => [...prevMessages, newMessage]);
-
-          // Display a notification
-          toast.info(`New message from ${newMessage.fromFullName}`);
-        }
+        const newMessage = {
+          ...data.message,
+          fromFullName:
+            users.find((user) => user._id === data.message.fromUserId)
+              ?.fullName || "Someone",
+        };
+        setMessages((prevMessages) => [...prevMessages, newMessage]);
       }
     };
 
     ws.addEventListener("message", handleMessage);
     return () => ws.removeEventListener("message", handleMessage);
-  }, [ws, currentUserID, state.conversations.conversations]); // Ensure dependencies are correctly listed
+  }, [ws, currentUserID, users, groups, activeConversationId, activeChat]);
 
+  //===================================================================================================//
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+  //===================================================================================================//
   const handleFetchMessages = async (
     conversationId,
     participantId1,
@@ -253,7 +272,7 @@ function MainPage({ currentUser }) {
       .then(() => {
         ws.send(
           JSON.stringify({
-            type: "NEW_MESSAGE",
+            type: "user",
             conversationId: activeChat.conversationId,
             message: {
               ...newMessage,
@@ -372,90 +391,114 @@ function MainPage({ currentUser }) {
 
   return (
     <div className="main-page">
-      <h3>Hello, {currentUserFullName}</h3>
-      <button onClick={() => setShowModal(true)}>Start New Conversation</button>
-      <button onClick={navigateToGroupManagement}>Groups</button>
-      <button onClick={() => navigateToConversationHistory(currentUserID)}>
-        Conversation History
-      </button>
-      <LogoutButton />
+      <div className="sidebar">
+        <h3>Hello, {currentUserFullName}</h3>
+        {/* Chat button */}
+        <button
+          onClick={() => setShowModal(!showModal)}
+          className="icon-button"
+        >
+          <FontAwesomeIcon icon={faComment} />
+        </button>
+        {/* Groups button */}
+        <button onClick={navigateToGroupManagement} className="icon-button">
+          <FontAwesomeIcon icon={faUsers} />
+        </button>
+        {/* Conversation History button */}
+        <button
+          onClick={() => navigateToConversationHistory(currentUserID)}
+          className="icon-button"
+        >
+          <FontAwesomeIcon icon={faHistory} />
+        </button>
+        {/* Logout button */}
+        <LogoutButton className="icon-button">
+          <FontAwesomeIcon icon={faSignOutAlt} />
+        </LogoutButton>
 
-      {showModal && (
-        <div className="modal">
-          {/* Modal content for selecting a user */}
-          <div className="modal-content">
-            <span className="close" onClick={() => setShowModal(false)}>
-              &times;
-            </span>
-            <h2>Select a User</h2>
+        {/* Back button inside the chat list for consistency */}
+        <div className={`sidebar-chat-list ${showModal ? "active" : ""}`}>
+          <button onClick={() => setShowModal(false)} className="icon-button">
+            <FontAwesomeIcon icon={faArrowLeft} />
+          </button>
+          <ul>
             {loadingUsers ? (
               <p>Loading...</p>
             ) : (
-              <ul>
-                {usersExcludingCurrent.map((user) => (
-                  <li
-                    key={user._id}
-                    onClick={() => handleSelectUser(user, state, currentUserID)}
-                  >
-                    {user.fullName}
-                  </li>
-                ))}
-              </ul>
+              usersExcludingCurrent.map((user) => (
+                <li key={user._id} onClick={() => handleSelectUser(user)}>
+                  {user.fullName}
+                </li>
+              ))
             )}
-          </div>
+          </ul>
         </div>
-      )}
-      {activeChat && (
-        <div className="chat-window">
-          <h3>Chat with {activeChat.fullName}</h3>
-          <button onClick={closeChat}>Close Chat</button>
-          <div className="messages">
-            {Array.isArray(messages) &&
-              messages.map((msg, index) => (
-                <p key={index}>
+      </div>
+
+      {/* Chat area */}
+      <div className="chat-area">
+        {activeChat && (
+          <div className="chat-window">
+            <h3>Chat with {activeChat.fullName}</h3>
+            <button onClick={closeChat}>Close Chat</button>
+            <div className="messages">
+              {messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`message ${
+                    msg.fromUserId === currentUserID
+                      ? "message-sent"
+                      : "message-received"
+                  }`}
+                >
                   {msg.fromFullName}: {msg.content}
-                </p>
+                </div>
               ))}
+              <div ref={messagesEndRef} />
+            </div>
+            <form onSubmit={sendMessage}>
+              <input
+                type="text"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Type a message..."
+              />
+              <button type="submit">Send</button>
+            </form>
+            <button onClick={() => handleShowUserOptions(activeChat)}>
+              More
+            </button>
           </div>
-          <form onSubmit={sendMessage}>
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Type a message..."
-            />
-            <button type="submit">Send</button>
-          </form>
-          <button onClick={() => handleShowUserOptions(activeChat)}>
-            More
-          </button>
-        </div>
-      )}
-      {showUserOptions && (
-        <div>
-          <button onClick={handleAddUserToGroup}>Add to Group</button>
-          <button onClick={handleCreateGroupWithUser}>
-            Create Group with User
-          </button>
-          {blockedUserIds.includes(selectedUser?._id) ? ( // Directly check if user is blocked
-            <button onClick={handleUnblockUser}>Unblock</button>
-          ) : (
-            <button onClick={handleBlockUser}>Block</button>
-          )}
-          <button onClick={() => setShowUserOptions(false)}>Close</button>
-        </div>
-      )}
-      {showGroupOptions && (
-        <div>
-          <h3>Select a Group</h3>
-          {groups.map((group) => (
-            <p key={group._id} onClick={() => handleGroupSelection(group._id)}>
-              {group.name}
-            </p>
-          ))}
-          <button onClick={() => setShowGroupOptions(false)}>Close</button>
-        </div>
-      )}
+        )}
+        {showUserOptions && (
+          <div>
+            <button onClick={handleAddUserToGroup}>Add to Group</button>
+            <button onClick={handleCreateGroupWithUser}>
+              Create Group with User
+            </button>
+            {blockedUserIds.includes(selectedUser?._id) ? (
+              <button onClick={handleUnblockUser}>Unblock</button>
+            ) : (
+              <button onClick={handleBlockUser}>Block</button>
+            )}
+            <button onClick={() => setShowUserOptions(false)}>Close</button>
+          </div>
+        )}
+        {showGroupOptions && (
+          <div>
+            <h3>Select a Group</h3>
+            {groups.map((group) => (
+              <p
+                key={group._id}
+                onClick={() => handleGroupSelection(group._id)}
+              >
+                {group.name}
+              </p>
+            ))}
+            <button onClick={() => setShowGroupOptions(false)}>Close</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

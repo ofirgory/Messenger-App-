@@ -1,0 +1,53 @@
+.group-item {
+  background: white;
+  border: 1px solid #ccc; /* Light grey border */
+  padding: 15px; /* Padding inside the box */
+  border-radius: 8px; /* Rounded corners */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+}
+
+.user-item .action-buttons {
+  display: none;
+}
+
+.user-item:hover .action-buttons {
+  display: block;
+}
+
+.groups-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+.btn {
+  display: inline-block;
+  background-color: #007bff; /* Bootstrap primary color for example */
+  color: white;
+  padding: 10px 15px;
+  border-radius: 5px;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 0.2s;
+}
+
+.btn:hover {
+  background-color: #0056b3; /* Darker shade for hover effect */
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px; /* Adjust size as needed */
+  height: 40px;
+  margin: 5px;
+  background-color: #007bff; /* Or any color that fits your design */
+  color: white;
+  border: none;
+  border-radius: 50%; /* Round shape */
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.icon-button:hover {
+  background-color: #0056b3; /* Darker shade on hover */
+}

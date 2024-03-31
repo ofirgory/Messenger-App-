@@ -19,7 +19,7 @@ export const addMessageToDB = createAsyncThunk(
       console.log("Sending message to server:", formattedMessage);
 
       const response = await axios.post(
-        `http://localhost:5000/users/conversations/addMessage`,
+        `http://localhost:5000/conversations/addMessage`,
         formattedMessage
       );
 

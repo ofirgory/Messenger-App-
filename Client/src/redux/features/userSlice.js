@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
+const serverUrl = "https://1kkzl2cf-5000.euw.devtunnels.ms/";
+
 // Async thunk for creating a new user
 export const createUser = createAsyncThunk(
   "user/createUser",
